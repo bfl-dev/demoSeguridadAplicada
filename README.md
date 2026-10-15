@@ -36,6 +36,17 @@ vagrant up        # crea y aprovisiona victim (.10) y attacker (.11)
 
 Credenciales: CRUD Penguin `pingu1/hielo123` · Inscripción `estudiante1/clave123`.
 
+La sala de espera de inscripción usa una **cola FIFO en el backend**, persistida
+en SQLite. Cada navegador recibe un ticket aleatorio en una cookie `HttpOnly`;
+recargar conserva su posición y la página consulta `/queue/status` cada segundo.
+El servidor habilita un ingreso cada 3 segundos. `QUEUE_INTERVAL` permite ajustar
+ese intervalo (en segundos, mínimo 0.1) en el entorno de la app.
+Los turnos sin consultas durante 2 minutos caducan; al llegar el turno hay
+2 minutos para completar el login. Tanto GET como POST de `/login` exigen un
+turno habilitado, que se consume al autenticar correctamente, en ambos modos.
+La cola regula la frecuencia de ingreso; no limita las sesiones ya autenticadas,
+para conservar la demostración de robo de sesión. Las sesiones siguen en memoria.
+
 ## 3. Antes de la demo (3 cosas o no funciona)
 
 1. **Usa Chromium/Chrome** y permite cookies de terceros para el sitio víctima.
@@ -69,7 +80,7 @@ atado a la IP → la cookie robada devuelve **401**.
 ## 5. Pruebas
 
 ```bash
-./tests/run.sh     # levanta ambas apps en los 2 modos y verifica todo (17 checks)
+./tests/run.sh     # prueba FIFO, vencimientos y concurrencia; luego ambas apps en los 2 modos
 ```
 
 ## 6. Estructura

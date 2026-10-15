@@ -9,4 +9,5 @@ if [ ! -d "$VENV" ]; then
   "$VENV/bin/pip" install -q --disable-pip-version-check Flask
 fi
 
+"$VENV/bin/python" tests/test_queue.py
 exec "$VENV/bin/python" tests/test_demo.py

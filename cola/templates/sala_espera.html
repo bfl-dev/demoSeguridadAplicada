@@ -12,8 +12,6 @@
           text-align:center; max-width:460px; }
   h1 { font-size:1.25rem; margin:.2rem 0 1.2rem; }
   .pos { font-size:3rem; font-weight:700; color:#0a6cff; margin:.3rem 0; }
-  .bar { height:10px; background:#e2e8f0; border-radius:6px; overflow:hidden; margin:1.2rem 0; }
-  .bar > i { display:block; height:100%; width:5%; background:#0a6cff; transition:width .8s; }
   p { color:#5a6b7b; font-size:.9rem; }
   button { margin-top:1rem; padding:.7rem 1.6rem; border:0; border-radius:8px; background:#0a6cff;
            color:#fff; font-size:1rem; cursor:pointer; }
@@ -27,27 +25,41 @@
   <div class="card">
     <h1>Inscripcion de Ramos &mdash; Sala de Espera</h1>
     <p>Estas en la fila. Mantente en esta pagina, tu lugar se guarda automaticamente.</p>
-    <div class="pos" id="pos">1.248</div>
-    <div class="bar"><i id="bar"></i></div>
+    <div class="pos" id="pos">{{ state.position }}</div>
     <p id="msg">Tiempo estimado de espera: calculando&hellip;</p>
     <button id="go" disabled>Ingresar al sistema</button>
+    <noscript>
+      <p>Activa JavaScript o recarga esta pagina para consultar tu turno.</p>
+      {% if state.admitted %}<a href="/login">Ingresar al sistema</a>{% endif %}
+    </noscript>
   </div>
 <script>
-  // Fachada de sala de espera (solo visual): baja la posicion y habilita el ingreso.
-  let pos = 1248, pct = 5;
-  const elPos = document.getElementById('pos'), elBar = document.getElementById('bar'),
+  const elPos = document.getElementById('pos'),
         elMsg = document.getElementById('msg'), btn = document.getElementById('go');
-  const t = setInterval(() => {
-    pos = Math.max(0, pos - Math.ceil(pos * 0.35));
-    pct = Math.min(100, pct + 30);
-    elPos.textContent = pos.toLocaleString('es-CL');
-    elBar.style.width = pct + '%';
-    if (pos === 0) {
-      clearInterval(t);
-      elMsg.textContent = 'Es tu turno.';
-      btn.disabled = false;
+  function render(state) {
+    elPos.textContent = state.position.toLocaleString('es-CL');
+    btn.disabled = !state.admitted;
+    elMsg.textContent = state.admitted
+      ? 'Es tu turno. Tienes 2 minutos para completar el ingreso.'
+      : `Tiempo estimado de espera: ${state.eta_seconds} segundos.`;
+  }
+  async function poll() {
+    try {
+      const response = await fetch('/queue/status', { cache: 'no-store' });
+      if (response.status === 401) {
+        location.replace('/');
+        return;
+      }
+      if (!response.ok) throw new Error('No se pudo consultar el turno');
+      render(await response.json());
+    } catch (error) {
+      btn.disabled = true;
+      elMsg.textContent = 'No se pudo consultar tu turno. Reintentando...';
     }
-  }, 900);
+    setTimeout(poll, 1000);
+  }
+  render({{ state | tojson }});
+  setTimeout(poll, 1000);
   btn.onclick = () => location.href = '/login';
 </script>
 </body>

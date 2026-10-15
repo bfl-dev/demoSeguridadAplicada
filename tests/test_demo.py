@@ -10,6 +10,7 @@ Uso:
 Sale con codigo 0 si todo pasa, 1 si algo falla.
 """
 import http.client
+import json
 import os
 import re
 import subprocess
@@ -61,7 +62,7 @@ def start(mode):
             os.remove(os.path.join(ROOT, db))
         except FileNotFoundError:
             pass
-    env = dict(os.environ, DEMO_MODE=mode)
+    env = dict(os.environ, DEMO_MODE=mode, QUEUE_INTERVAL="0.1")
     env.pop("TLS_CERT", None)
     env.pop("TLS_KEY", None)
     procs = [
@@ -118,9 +119,26 @@ def run_penguin(mode):
 
 def run_cola(mode):
     print(f"=== COLA (Broken Auth) modo={mode} ===")
-    _, setc, _ = req(8000, "POST", "/login", body="usuario=estudiante1&clave=clave123")
+    def enter_queue():
+        _, setc, _ = req(8000, "GET", "/")
+        ticket = cookie_from(setc, "queue_ticket")
+        for _ in range(100):
+            st, _, body = req(8000, "GET", "/queue/status", cookie=ticket)
+            if st == 200 and json.loads(body)["admitted"]:
+                return ticket
+            time.sleep(0.02)
+        raise RuntimeError("la cola no habilito el ingreso")
+
+    for method in ("GET", "POST"):
+        st, _, _ = req(8000, method, "/login", body="usuario=estudiante1&clave=clave123" if method == "POST" else None)
+        check(f"{method} /login sin turno bloqueado", st == 302)
+    ticket = enter_queue()
+    _, setc, _ = req(8000, "POST", "/login", cookie=ticket, body="usuario=estudiante1&clave=clave123")
     sid_val = cookie_from(setc, "sid").split("=", 1)[1]
-    _, setc2, _ = req(8000, "POST", "/login", cookie="sid=ZZZpreset",
+    st, _, _ = req(8000, "GET", "/queue/status", cookie=ticket)
+    check("el turno se consume al autenticar", st == 401)
+    ticket2 = enter_queue()
+    _, setc2, _ = req(8000, "POST", "/login", cookie=ticket2 + "; sid=ZZZpreset",
                       body="usuario=estudiante1&clave=clave123")
     sid_preset = cookie_from(setc2, "sid").split("=", 1)[1]
     if mode == "vuln":
